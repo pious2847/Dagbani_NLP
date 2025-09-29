@@ -4,8 +4,7 @@ import torch
 from transformers import pipeline
 
 # --- CONFIGURATION ---
-# This should be the name of the folder where your best model was saved.
-MODEL_PATH = "./dagbani_translator_local"
+MODEL_PATH = "../models/dagbani_translator_local"
 
 def check_setup():
     """Checks if the model folder exists and if PyTorch can detect a GPU."""

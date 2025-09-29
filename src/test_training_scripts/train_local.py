@@ -22,16 +22,12 @@ import evaluate
 # All your settings are here for easy access
 
 # --- File Paths ---
-# Create a folder named 'datasets' and put your .tsv files inside it
-DATA_FOLDER = "./datasets"
-# Where the final trained model will be saved
-MODEL_OUTPUT_DIR = "./dagbani_translator_local"
-# Name for the plot showing training progress
-PLOT_FILENAME = "training_graph.png"
+DATA_FOLDER = "../data/datasets"
+MODEL_OUTPUT_DIR = "../models/dagbani_translator_local"
+PLOT_FILENAME = "../experiments/training_graph.png"
 
 # --- Model & Tokenizer ---
-# The pre-trained model we are fine-tuning
-MODEL_CHECKPOINT = "./model"
+MODEL_CHECKPOINT = "../models/model"
 
 # --- Training Parameters (TUNED FOR LOW VRAM GPUS) ---
 LEARNING_RATE = 3e-5
