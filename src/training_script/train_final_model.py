@@ -19,19 +19,26 @@ import evaluate
 
 # --- 1. CONFIGURATION ---
 
+# Get the absolute path of the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # --- File Paths ---
-DATA_FOLDER = "../../data/datasets_combined"
-MODEL_OUTPUT_DIR = "../../models/final_dagbani_translator"
-PLOT_FILENAME = "../../experiments/training_graph_final.png"
+# Resolve paths relative to the script location
+DATA_FILE = os.path.join(SCRIPT_DIR, "../../data/processed/final_training_set.tsv")
+MODEL_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "../../models/final_dagbani_nllb")
+PLOT_FILENAME = os.path.join(SCRIPT_DIR, "../../experiments/training_graph_nllb.png")
 
 # --- Model & Tokenizer ---
-MODEL_CHECKPOINT = "../../models/model"
+# Switch to NLLB-200 (Distilled 600M is a good balance of speed/performance)
+MODEL_CHECKPOINT = "facebook/nllb-200-distilled-600M"
 
 # --- Training Parameters ---
-LEARNING_RATE = 3e-5
+LEARNING_RATE = 2e-5 # Slightly lower for fine-tuning a larger model
 NUM_EPOCHS = 10
-PER_DEVICE_BATCH_SIZE = 4
-GRADIENT_ACCUMULATION_STEPS = 4
+# Reduced batch size for 4GB GPU
+PER_DEVICE_BATCH_SIZE = 1 
+# Increased accumulation to maintain effective batch size
+GRADIENT_ACCUMULATION_STEPS = 16 
 
 # --- Helper Functions ---
 
@@ -45,70 +52,25 @@ def check_gpu():
         print("⚠️ Warning: No GPU detected. Training will run on the CPU (very slow).")
         return False
 
-# **** NEW AND IMPROVED DATA LOADING FUNCTION ****
-def load_and_prepare_data(data_folder):
+def load_and_prepare_data(data_file):
     """
-    Loads data, intelligently combining high-quality and synthetic datasets
-    to avoid data collision and maximize unique examples.
+    Loads the pre-built curriculum dataset.
     """
-    print("\n--- 1. Loading & Preparing All Combined Data (Smart Method) ---")
+    print(f"\n--- 1. Loading Curriculum Data from {data_file} ---")
     
-    if not os.path.exists(data_folder):
-        print(f"❌ Error: Data folder not found at '{data_folder}'")
+    if not os.path.exists(data_file):
+        print(f"❌ Error: Data file not found at '{data_file}'")
         sys.exit()
 
-    all_files = [os.path.join(data_folder, f) for f in os.listdir(data_folder) if f.endswith('.tsv')]
-    if not all_files:
-        print(f"❌ Error: No .tsv files found in '{data_folder}'")
-        sys.exit()
-
-    # Separate high-quality (HQ) files from the synthetic file
-    hq_files = [f for f in all_files if 'synthetic_dataset' not in f]
-    synthetic_file = [f for f in all_files if 'synthetic_dataset' in f]
-
-    if not hq_files:
-        print("❌ Error: No high-quality dataset files found.")
-        sys.exit()
-    if not synthetic_file:
-        print("⚠️ Warning: No synthetic dataset file found. Proceeding with HQ data only.")
-        synthetic_file = None
-    else:
-        synthetic_file = synthetic_file[0]
-
-    # --- Step 1: Load and clean the High-Quality (HQ) data ---
-    print(f"Found {len(hq_files)} high-quality dataset files.")
-    hq_df_list = [pd.read_csv(file, sep='\t', on_bad_lines='warn', header=0) for file in tqdm(hq_files, desc="Reading HQ files")]
-    hq_df = pd.concat(hq_df_list, ignore_index=True)
-    hq_df.rename(columns={'English': 'english', 'Dagbani': 'dagbani'}, inplace=True, errors='ignore')
-    hq_df['english'] = hq_df['english'].astype(str).str.lower().str.strip()
-    hq_df['dagbani'] = hq_df['dagbani'].astype(str).str.lower().str.strip()
-    hq_df.dropna(inplace=True)
-    hq_df.drop_duplicates(inplace=True)
-    print(f"Found {len(hq_df)} unique examples in high-quality datasets.")
-
-    # --- Step 2: Load and filter the synthetic data ---
-    if synthetic_file:
-        synth_df = pd.read_csv(synthetic_file, sep='\t', on_bad_lines='warn', header=0)
-        synth_df.rename(columns={'english': 'english', 'dagbani': 'dagbani'}, inplace=True, errors='ignore')
-        synth_df['english'] = synth_df['english'].astype(str).str.lower().str.strip()
-        synth_df['dagbani'] = synth_df['dagbani'].astype(str).str.lower().str.strip()
-        synth_df.dropna(inplace=True)
-        synth_df.drop_duplicates(inplace=True)
-        print(f"Loaded {len(synth_df)} unique examples from synthetic dataset.")
-
-        # This is the CRUCIAL step: keep only synthetic examples for NEW Dagbani sentences
-        existing_dagbani = set(hq_df['dagbani'])
-        synth_df = synth_df[~synth_df['dagbani'].isin(existing_dagbani)]
-        print(f"Kept {len(synth_df)} synthetic examples for novel Dagbani sentences.")
-
-        # --- Step 3: Combine the HQ data and the filtered synthetic data ---
-        full_df = pd.concat([hq_df, synth_df], ignore_index=True)
-    else:
-        full_df = hq_df
-
-    print(f"\nTotal unique examples for training: {len(full_df)}")
-
-    hf_dataset = Dataset.from_pandas(full_df)
+    df = pd.read_csv(data_file, sep='\t', on_bad_lines='skip')
+    
+    # Ensure strings
+    df['english'] = df['english'].astype(str).str.strip()
+    df['dagbani'] = df['dagbani'].astype(str).str.strip()
+    
+    print(f"Loaded {len(df)} training examples.")
+    
+    hf_dataset = Dataset.from_pandas(df)
     return hf_dataset.train_test_split(test_size=0.1, seed=42)
 
 
@@ -117,6 +79,7 @@ def plot_training_history(history, filename):
     print("\n--- 5. Generating Training Graph ---")
     
     train_loss = [item['loss'] for item in history if 'loss' in item]
+    # Filter eval_loss to match training steps roughly or just plot available points
     eval_loss = [item['eval_loss'] for item in history if 'eval_loss' in item]
     epochs = [item['epoch'] for item in history if 'eval_loss' in item]
     
@@ -125,10 +88,14 @@ def plot_training_history(history, filename):
         return
 
     plt.figure(figsize=(10, 6))
-    plt.plot(epochs, train_loss[:len(epochs)], 'b-o', label='Training Loss')
-    plt.plot(epochs, eval_loss, 'r-o', label='Validation Loss')
-    plt.title('Final Model - Training and Validation Loss')
-    plt.xlabel('Epoch')
+    # Note: train_loss might be more frequent than eval_loss, so we plot what we have
+    plt.plot(train_loss, label='Training Loss (Steps)')
+    # We can't easily align epochs on x-axis if lengths differ without more logic, 
+    # so simple plot is safer for now or just plot eval
+    # plt.plot(epochs, eval_loss, 'r-o', label='Validation Loss')
+    
+    plt.title('NLLB Model - Training Loss')
+    plt.xlabel('Steps')
     plt.ylabel('Loss')
     plt.legend()
     plt.grid(True)
@@ -141,16 +108,26 @@ def main():
     """Main function to run the entire training pipeline."""
     
     check_gpu()
-    split_datasets = load_and_prepare_data(DATA_FOLDER)
+    split_datasets = load_and_prepare_data(DATA_FILE)
     
-    print("\n--- 2. Initializing Model & Tokenizer ---")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_CHECKPOINT)
+    print("\n--- 2. Initializing NLLB Model & Tokenizer ---")
+    # NLLB requires specifying source and target languages
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_CHECKPOINT, src_lang="eng_Latn", tgt_lang="dag_Latn")
     model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_CHECKPOINT)
 
     def preprocess_function(examples):
         inputs = examples["english"]
         targets = examples["dagbani"]
-        model_inputs = tokenizer(inputs, text_target=targets, max_length=128, truncation=True)
+        
+        # Tokenize inputs (English) - Reduced max_length to 64 to save memory
+        model_inputs = tokenizer(inputs, max_length=64, truncation=True)
+        
+        # Tokenize targets (Dagbani)
+        # We must set the tokenizer to target language mode for labels
+        with tokenizer.as_target_tokenizer():
+            labels = tokenizer(targets, max_length=64, truncation=True)
+
+        model_inputs["labels"] = labels["input_ids"]
         return model_inputs
 
     tokenized_datasets = split_datasets.map(preprocess_function, batched=True, desc="Tokenizing datasets")
@@ -174,6 +151,10 @@ def main():
         return {"bleu": result["score"]}
 
     print("\n--- 3. Configuring Final Training ---")
+    
+    # Clear cache before training
+    torch.cuda.empty_cache()
+    
     training_args = Seq2SeqTrainingArguments(
         output_dir=MODEL_OUTPUT_DIR,
         eval_strategy="epoch",
@@ -190,6 +171,8 @@ def main():
         logging_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
+        gradient_checkpointing=True, # Enable gradient checkpointing to save memory
+        optim="adafactor", # Use Adafactor to save memory
     )
 
     trainer = Seq2SeqTrainer(

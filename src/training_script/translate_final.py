@@ -3,7 +3,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # --- CONFIGURATION ---
 # Path to the FINAL, most powerful model you just trained
-MODEL_DIR = "../../models/gentle_finetuned_translator"
+MODEL_DIR = "../../models/final_dagbani_translator"
 
 # --- Load Tokenizer and Model ---
 print("--- Loading Final Translator Model ---")

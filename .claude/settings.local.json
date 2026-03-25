@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(du -sh /c/Users/CODE-D/OneDrive/Desktop/DEV/Dagbani_NLP_Project/models/*)",
+      "WebSearch",
+      "WebFetch(domain:learndagbani.org)",
+      "WebFetch(domain:lagim.blogs.brynmawr.edu)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:www2.statmt.org)",
+      "WebFetch(domain:www.arxiv.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:dl-translate.readthedocs.io)",
+      "WebFetch(domain:cointegrated.medium.com)",
+      "WebFetch(domain:eudl.eu)"
+    ]
+  }
+}

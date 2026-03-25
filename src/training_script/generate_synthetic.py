@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 # --- CONFIGURATION ---
 MODEL_DIR = "../../models/dagbani_to_english_model"
-MONOLINGUAL_CORPUS = "../../data/raw/dagbani_corpus copy.txt"
+MONOLINGUAL_CORPUS = "../../data/raw/dagbani_corpus.txt"
 OUTPUT_TSV_FILE = "../../data/raw/synthetic_dataset.tsv"
 # How many sentences to process at once
 BATCH_SIZE = 16
